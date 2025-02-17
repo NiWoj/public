@@ -3,14 +3,6 @@
 // This DCTL was created by Nicolas Wojdacki and is free to use or edit
 
 
-__DEVICE__ float Linear_to_Cinelike(float lin)
-{
-    float CIN_LIN_CUT = 0.1595;
-
-    float value = 0.215752*log(1.11838*(lin/4.096)+0.0142194)+0.974765;
-
-    return value;
-}
 
 __DEVICE__ float ALTCinelike_to_Linear(float value)
 {
@@ -55,50 +47,6 @@ __DEVICE__ float MYCinelike_to_Linear(float value)
     return cal;
 }
 
-__DEVICE__ float Cinelike_to_Linear(float value)
-{
-    float Z = 0.825370552155;
-
-    float H = -0.015;
-
-    float C = -0.96;
-
-    float B = -2.93;
-
-    float A = 0.865;
-
-    float E = -0.02;
-
-    float D = 0.00395;
-
-    float G = -0.00069;
-
-    float M = -1*(1/pow(80+pow(400*value-25, 2), 1.5));
-
-    float N = -1*(1/pow(40+pow(50*value-18, 2), 1.5));
-
-    float O = 1/pow(390 + pow(4000*value-25, 2), 1.5);
-
-    float P = 1/pow(50 + pow(110*value-17, 2), 1.5);
-
-    float R = -1*(1/pow(13+pow(20*value-19, 2), 1.5));
-
-    float S = 1/pow(200 + pow(1000*value-22, 2), 1.5);
-
-    float T = -1*(1/pow(400 + pow(9000*value-40, 2), 1.5));
-
-    float U = 1/pow(2 + pow(40*value-41.5314210295, 2), 3/2);
-
-    float V = 1/pow(30 + pow(55*value-39, 2), 1.5);
-
-
-    float lin = ((1.0 / (A + B * log(value - D) + H * pow(log(value - D), 4) + C * pow(log(value - D), 3) + E * pow(value, 6) + G) + M + N + O + P + R + S + T + U + V) * Z);
-
-    float diff = (value+(value-lin));
-
-    return diff;
- 
-}
 
 __DEVICE__ float3 Linear_to_DWG(float3 curve)
 {
