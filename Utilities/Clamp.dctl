@@ -1,0 +1,25 @@
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B)
+{
+    
+    float3 in = {p_R, p_G, p_B};
+  
+   float3 out;
+   out.x = _clampf(in.x, 0.0f, 1.0f);
+   out.y = _clampf(in.y, 0.0f, 1.0f);
+   out.z = _clampf(in.z, 0.0f, 1.0f);
+
+
+
+    return out;
+}
+
+
+
+
+
+
+
+
+
+
