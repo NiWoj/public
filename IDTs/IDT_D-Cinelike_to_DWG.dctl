@@ -1,0 +1,155 @@
+// IDT D-Gamut/DJI D-Cinelike to DaVinci Wide Gamut/DaVinci Intermediate
+
+// This DCTL was written by Nicolas Wojdacki and is free to use or change
+
+
+__DEVICE__ float Linear_to_Cinelike(float lin)
+{
+    float CIN_LIN_CUT = 0.1595;
+
+    float value = 0.215752*log(1.11838*(lin/4.096)+0.0142194)+0.974765;
+
+    return value;
+}
+
+__DEVICE__ float ALTCinelike_to_Linear(float value)
+{
+
+    float lin= 1-(pow((1-value)/(1-0), 0.46)*1);
+    float func = lin*(1 - -0.00) + -0.00;
+
+    float cal = (1.31648041f*pow(value, 3.0) - 0.97415041f*pow(value, 2.0) + 0.77345304f*value - 0.01314609f);
+    
+
+    return cal;
+}
+
+__DEVICE__ float3 D-Gamut_to_DWG(float3 rgb) {
+    // Conversion matrix from Rec.2020 to DaVinci Wide Gamut
+    float3x3 M_A_to_B = float3x3(
+        0.9080,  0.0129,  0.0791,
+        0.0310,  0.7842,  0.1848,
+        0.0669,  0.0856,  0.8475
+    );
+
+
+
+
+    // Apply the matrix transformation
+     float3 out = make_float3(
+            M_A_to_B[0][0] * rgb.x + M_A_to_B[0][1] * rgb.y + M_A_to_B[0][2] * rgb.z,
+            M_A_to_B[1][0] * rgb.x + M_A_to_B[1][1] * rgb.y + M_A_to_B[1][2] * rgb.z,
+            M_A_to_B[2][0] * rgb.x + M_A_to_B[2][1] * rgb.y + M_A_to_B[2][2] * rgb.z
+        );
+
+    return out;
+}
+
+__DEVICE__ float MYCinelike_to_Linear(float value)
+{
+
+
+    float cal = (pow(10, (value - 0.9468) / 0.59) / 1.2) - 0.0256;
+    
+
+    return cal;
+}
+
+__DEVICE__ float Cinelike_to_Linear(float value)
+{
+    float Z = 0.825370552155;
+
+    float H = -0.015;
+
+    float C = -0.96;
+
+    float B = -2.93;
+
+    float A = 0.865;
+
+    float E = -0.02;
+
+    float D = 0.00395;
+
+    float G = -0.00069;
+
+    float M = -1*(1/pow(80+pow(400*value-25, 2), 1.5));
+
+    float N = -1*(1/pow(40+pow(50*value-18, 2), 1.5));
+
+    float O = 1/pow(390 + pow(4000*value-25, 2), 1.5);
+
+    float P = 1/pow(50 + pow(110*value-17, 2), 1.5);
+
+    float R = -1*(1/pow(13+pow(20*value-19, 2), 1.5));
+
+    float S = 1/pow(200 + pow(1000*value-22, 2), 1.5);
+
+    float T = -1*(1/pow(400 + pow(9000*value-40, 2), 1.5));
+
+    float U = 1/pow(2 + pow(40*value-41.5314210295, 2), 3/2);
+
+    float V = 1/pow(30 + pow(55*value-39, 2), 1.5);
+
+
+    float lin = ((1.0 / (A + B * log(value - D) + H * pow(log(value - D), 4) + C * pow(log(value - D), 3) + E * pow(value, 6) + G) + M + N + O + P + R + S + T + U + V) * Z);
+
+    float diff = (value+(value-lin));
+
+    return diff;
+ 
+}
+
+__DEVICE__ float3 Linear_to_DWG(float3 curve)
+{
+    float DI_A = 0.0075f;
+    float DI_B = 7.0f;
+    float DI_C = 0.07329248f;
+    float DI_M = 10.44426855f;
+    float DI_LIN_CUT = 0.00262409f;
+
+
+
+    float R = curve.x<DI_LIN_CUT ? curve.x*DI_M : (log2(curve.x + DI_A) + DI_B)*DI_C;
+
+    float G = curve.y<DI_LIN_CUT ? curve.y*DI_M : (log2(curve.y + DI_A) + DI_B)*DI_C;
+
+    float B = curve.z<DI_LIN_CUT ? curve.z*DI_M : (log2(curve.z + DI_A) + DI_B)*DI_C;
+
+
+    const float3 V = make_float3(R, G, B);
+
+    return V;
+}
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B)
+{
+    float3 rgb = make_float3(p_R, p_G, p_B);
+    
+    float linR = MYCinelike_to_Linear(p_R);
+    float linG = MYCinelike_to_Linear(p_G);
+    float linB = MYCinelike_to_Linear(p_B);
+    float3 linear = make_float3(linR, linG, linB)*1.5;
+
+    float3 gamut = D-Gamut_to_DWG(linear);
+
+
+    float3 Linear_to_DaVinciIntermediate = Linear_to_DWG(gamut);
+
+
+
+    float3 out = Linear_to_DaVinciIntermediate;
+
+
+    return out;
+}
+
+
+
+
+
+
+
+
+
+

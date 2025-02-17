@@ -1,0 +1,80 @@
+// IDT Rec709/Technicolor CINESTYLE to DAVINCI WIDE GAMUT/DAVINCI INTERMEDIATE
+// Assumes 11.7 stops of dynamic range for Cinestyle log curve, thus multiplication by 10.3824
+// This DCTL was written by Nicolas Wojdacki
+
+
+__DEVICE__ float Linear_to_Cinestyle(float lin)
+{
+    float CIN_LIN_CUT = 0.1595;
+
+    float value = 0.215752*log(1.11838*(lin/4.096)+0.0142194)+0.974765;
+
+    return value;
+}
+
+__DEVICE__ float Cinestyle_to_Linear(float value)
+{
+    float CIN_LOG_CUT = 0.3209;
+
+    float lin = (exp((value - 0.974765)/0.215752) - 0.0142194)/1.11838 * 4.096;
+    if (lin > 0.0) {
+    value = 0.215752 * log(1.11838 * (lin / 4.096) + 0.0142194) + 0.974765;}
+    else {value= lin;}
+
+    return lin;
+}
+
+__DEVICE__ float3 Linear_to_DWG(float3 curve)
+{
+    float DI_A = 0.0075f;
+    float DI_B = 7.0f;
+    float DI_C = 0.07329248f;
+    float DI_M = 10.44426855f;
+    float DI_LIN_CUT = 0.00262409f;
+
+
+
+    float R = curve.x<DI_LIN_CUT ? curve.x*DI_M : (log2(curve.x + DI_A) + DI_B)*DI_C;
+
+    float G = curve.y<DI_LIN_CUT ? curve.y*DI_M : (log2(curve.y + DI_A) + DI_B)*DI_C;
+
+    float B = curve.z<DI_LIN_CUT ? curve.z*DI_M : (log2(curve.z + DI_A) + DI_B)*DI_C;
+
+
+    const float3 V = make_float3(R, G, B);
+
+    return V;
+}
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B)
+{
+    
+    float3 in = {p_R, p_G, p_B};
+    float linR = Cinestyle_to_Linear(in.x);
+    float linG = Cinestyle_to_Linear(in.y);
+    float linB = Cinestyle_to_Linear(in.z);
+    float3 linear = make_float3(linR, linG, linB);
+
+
+    float3 Rec709_to_DWG;
+
+    Rec709_to_DWG.x = 1.2037 * linear.x + -0.0361 * linear.y + -0.1676 * linear.z;
+    Rec709_to_DWG.y = -0.0402 * linear.x + 1.3015 * linear.y + -0.2613 * linear.z;
+    Rec709_to_DWG.z = -0.0092 * linear.x + -0.1423 * linear.y + 1.1515 * linear.z;
+
+
+    float3 out = Linear_to_DWG(Rec709_to_DWG);
+
+
+    return out;
+}
+
+
+
+
+
+
+
+
+
+

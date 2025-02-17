@@ -1,0 +1,123 @@
+// IDT REC2020/SAMSUNG LOG to DAVINCI WIDE GAMUT/DAVINCI INTERMEDIATE
+
+
+__DEVICE__ float Linear_to_SamsungLog(float x)
+{
+    float x0 = -0.05;
+    float xt = 0.01;
+    float α1 = 0.258984868;
+    float β1 = 0.0003645;
+    float γ1 = 0.720504856;
+    float α2 = -0.20942;
+    float β2 = 0.016904;
+    float γ2 = -0.24597;
+
+
+    float gLog = x >= xt ? α1*log(x+β1)+γ1 :
+                 x0 <= x && x < xt ? α2*log(-x+β2)+γ2 :
+                 x <x0 ? 0 : 0;
+
+    return gLog;
+}
+
+__DEVICE__ float SamsungLog_to_Linear(float γ)
+{
+    float γt = 0.206561909;
+    float α1 = 0.258984868;
+    float β1 = 0.0003645;
+    float γ1 = 0.720504856;
+    float α2 = -0.20942;
+    float β2 = 0.016904;
+    float γ2 = -0.24597;
+    float x0 = -0.05;
+   
+   
+    float lin = γ >= γt ? (pow(10,(γ-γ1)/α1) - β1) :
+                0 <= γ && γ < γt ? -1 * pow(10,(γ-γ2)/α2) + β2 :
+                γ < 0 ? x0 : x0;
+
+    return lin;
+}
+
+__DEVICE__ float MYSamsungLog_to_Linear(float γ)
+{
+    float γt = 0.206561909;
+    float α1 = 0.258984868;
+    float β1 = 0.0003645;
+    float γ1 = 0.720504856;
+    float α2 = -0.20942;
+    float β2 = 0.016904;
+    float γ2 = -0.24597;
+    float x0 = -0.05;
+    float k = 0.033808273677;
+   
+   
+    float lin = γ >= γt ? (pow(10,(γ-γ1)/α1) - β1) :
+                0 <= γ && γ < γt ? (-1 * pow(10,(γ-γ2)/α2) + β2)+k :
+                γ < 0 ? x0 : x0;
+
+    return lin;
+}
+
+
+
+__DEVICE__ float3 Linear_to_DWG(float3 curve)
+{
+    float DI_A = 0.0075f;
+    float DI_B = 7.0f;
+    float DI_C = 0.07329248f;
+    float DI_M = 10.44426855f;
+    float DI_LIN_CUT = 0.00262409f;
+
+
+
+    float R = curve.x<DI_LIN_CUT ? curve.x*DI_M : (log2(curve.x + DI_A) + DI_B)*DI_C;
+
+    float G = curve.y<DI_LIN_CUT ? curve.y*DI_M : (log2(curve.y + DI_A) + DI_B)*DI_C;
+
+    float B = curve.z<DI_LIN_CUT ? curve.z*DI_M : (log2(curve.z + DI_A) + DI_B)*DI_C;
+
+
+    const float3 V = make_float3(R, G, B);
+
+    return V;
+}
+
+__DEVICE__ float3 Rec2020_to_DWG(float3 rgb) {
+    // Conversion matrix from Rec.2020 to DaVinci Wide Gamut
+    float3x3 M_A_to_B = float3x3(
+        0.8921,  0.0244,  0.0835,
+        0.0326,  0.7861,  0.1812,
+       0.0700, 0.1047, 0.8253
+    );
+
+
+    // Apply the matrix transformation
+     float3 out = make_float3(
+            M_A_to_B[0][0] * rgb.x + M_A_to_B[0][1] * rgb.y + M_A_to_B[0][2] * rgb.z,
+            M_A_to_B[1][0] * rgb.x + M_A_to_B[1][1] * rgb.y + M_A_to_B[1][2] * rgb.z,
+            M_A_to_B[2][0] * rgb.x + M_A_to_B[2][1] * rgb.y + M_A_to_B[2][2] * rgb.z
+        );
+
+    return out;
+}
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B)
+{
+   
+    
+    float3 in = {p_R, p_G, p_B};
+
+    float linR = SamsungLog_to_Linear(in.x);
+    float linG = SamsungLog_to_Linear(in.y);
+    float linB = SamsungLog_to_Linear(in.z);
+    float3 linear = make_float3(linR, linG, linB);
+
+    float3 R2020toDWG = Rec2020_to_DWG(linear);
+
+
+    float3 out = Linear_to_DWG(R2020toDWG);
+
+
+    return out;
+}
