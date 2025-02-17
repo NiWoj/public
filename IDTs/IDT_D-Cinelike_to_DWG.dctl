@@ -1,6 +1,6 @@
 // IDT D-Gamut/DJI D-Cinelike to DaVinci Wide Gamut/DaVinci Intermediate
 
-// This DCTL was written by Nicolas Wojdacki and is free to use or change
+// This DCTL was created by Nicolas Wojdacki and is free to use or edit
 
 
 __DEVICE__ float Linear_to_Cinelike(float lin)
