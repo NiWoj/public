@@ -1,0 +1,177 @@
+
+// Bi-Vector Hue Convergence
+
+/* RGB to HSL; Rotate HSL; HSL to RGB  */
+DEFINE_UI_PARAMS(blend, Global Strength, DCTLUI_SLIDER_FLOAT, 1.f, 0.0f, 1.0f, 0.01f)
+DEFINE_UI_PARAMS(value1, Hue Vector, DCTLUI_SLIDER_FLOAT, 0.f, 0.0, 360.0f, 1)
+DEFINE_UI_PARAMS(hue_offset, Hue Vector Offset, DCTLUI_SLIDER_FLOAT, 0, -180.f, 180.0f, 1)
+DEFINE_UI_PARAMS(ratio, Ratio, DCTLUI_SLIDER_FLOAT, 0.5, 0.f, 1.0f, .1f)
+DEFINE_UI_PARAMS(sat_c, Saturation Compression, DCTLUI_SLIDER_FLOAT, 1.f, 0.0f, 1.0f, 0.01f)
+DEFINE_UI_PARAMS(lumfix, Preserve Luminance, DCTLUI_CHECK_BOX, 1)
+DEFINE_UI_PARAMS(checkbox, Target Hues, DCTLUI_CHECK_BOX, 0)
+
+__DEVICE__ float3 RGBtoHSL( float3 rgb)
+{
+        // RGB to HSL
+    
+    
+    const float R = rgb.x;
+    const float G = rgb.y;
+    const float B = rgb.z;
+    
+    const float Min = _fminf(R, _fminf(G, B));    
+    const float Max = _fmaxf(R, _fmaxf(G, B));    
+    const float del_Max = Max - Min;             
+
+    const float l = (Max + Min) / 2.0f;
+    const float s = del_Max == 0.0f ? 0.0f : (l < 0.5f ? del_Max / (Max + Min) : del_Max / (2.0f - Max - Min));
+    
+    const float del_R = (((Max - R) / 6.0f) + (del_Max / 2.0f)) / del_Max;
+    const float del_G = (((Max - G) / 6.0f) + (del_Max / 2.0f)) / del_Max;
+    const float del_B = (((Max - B) / 6.0f) + (del_Max / 2.0f)) / del_Max;
+   
+    const float h = del_Max == 0.0f ? 0.0f : (R == Max ? del_B - del_G : (G == Max ? (1.0f / 3.0f) + del_R - del_B : (2.0f / 3.0f) + del_G - del_R));
+
+
+
+    const float3 hsl = make_float3(h, s, l);
+
+    return hsl;
+}
+
+
+__DEVICE__ float3 HSLtoRGB( float3 hsl_out)
+{
+     // HSL to RGB
+     const float h = hsl_out.x;
+     const float s = hsl_out.y;
+     const float l = hsl_out.z;
+
+    const float Q = (l < 0.5f) ? (l * (1.0f + s)) : (l + s - l * s);
+    const float P = (2.0f * l - Q);
+
+    const float RH = ((h + 1.0f / 3.0f) < 0.0f) ? ((h + 1.0f / 3.0f) + 1.0f) :
+    (((h + 1.0f / 3.0f) > 1.0f) ? ((h + 1.0f / 3.0f) - 1.0f) : (h + 1.0f / 3.0f));
+    
+    const float RR = (RH < 1.0f / 6.0f) ? (P + (Q - P) * 6.0f * RH) : 
+    ((RH < 1.0f / 2.0f) ? Q : ((RH < 2.0f / 3.0f) 
+    ? (P + (Q - P) * (2.0f / 3.0f - RH) * 6.0f) : P));
+
+    const float GH = (h < 0.0f) ? (h + 1.0f) :
+    ((h > 1.0f) ? (h - 1.0f) : h);
+
+    const float GG = (GH < 1.0f / 6.0f) ? (P + (Q - P) * 6.0f * GH) :
+    ((GH < 1.0f / 2.0f) ? Q :
+    ((GH < 2.0f / 3.0f) ? (P + (Q - P) * (2.0f / 3.0f - GH) * 6.0f) : P));
+
+    const float BH = ((h - 1.0f / 3.0f) < 0.0f) ? ((h - 1.0f / 3.0f) + 1.0f) :
+    (((h - 1.0f / 3.0f) > 1.0f) ? ((h - 1.0f / 3.0f) - 1.0f) : (h - 1.0f / 3.0f));
+    
+    const float BB = (BH < 1.0f / 6.0f) ? (P + (Q - P) * 6.0f * BH) :
+    ((BH < 1.0f / 2.0f) ? Q :
+    ((BH < 2.0f / 3.0f) ? (P + (Q - P) * (2.0f / 3.0f - BH) * 6.0f) : P));
+    
+    
+    const float r = s == 0.0f ? l : RR;
+    const float g = s == 0.0f ? l : GG;
+    const float b = s == 0.0f ? l : BB;
+    
+    float3 rgb_return = make_float3(r, g, b);
+        
+    return rgb_return;
+}
+
+__DEVICE__ float3 RGB_Luminance( float3 rgb_out, float3 rgb)
+{
+    float lum_rgb = rgb.x*0.2126f + rgb.y*0.7152f + rgb.z*0.0722f;
+    float lum_rgb_out = rgb_out.x*0.2126f + rgb_out.y*0.7152f + rgb_out.z*0.0722f;
+    float diff = lum_rgb / (0.2126*rgb_out.x + 0.7152*rgb_out.y + 0.0722*rgb_out.z);
+    float lum_x = rgb_out.x*diff;
+    float lum_y = rgb_out.y*diff;
+    float lum_z = rgb_out.z*diff;
+
+   float3 lum_out = make_float3(lum_x, lum_y, lum_z);     
+    return lum_out;
+}
+
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B)
+{
+    float3 rgb =  make_float3(p_R, p_G, p_B);
+
+    float3 hsl = RGBtoHSL(rgb);
+   
+    float hue1 = (value1/360);
+    float hue2 = (hue1+0.5f+hue_offset/360); 
+    float hue_midpoint = (hue2-hue1)*0.5+((hue2-hue1)*(ratio-0.5f));
+    float hue_midpoint2 = hue2 + (1-(hue2-hue1))*0.5+((1-(hue2-hue1))*(ratio-0.5f));
+        if (hue_midpoint2>1.0){
+            hue_midpoint2= hue_midpoint2-1.0f;
+        }
+
+    float target_hue = hue1;
+    if(hsl.x >  hue_midpoint && hsl.x < hue_midpoint2) {
+        target_hue = hue2;
+        }
+
+    float point1 = hue1;
+    float point2 = hue_midpoint;
+    float point3 = hue2;
+    float point4 = hue_midpoint2;
+    float point5 = 1.0 + point1;
+    float point0 = -(1.0-point4);
+    float smoothstepfunction = smoothstep(point0,point1,hsl.x)-
+        smoothstep(point1,point2,hsl.x)+
+        smoothstep(point2,point3,hsl.x)-
+        smoothstep(point3,point4,hsl.x)+
+        smoothstep(point4,point5,hsl.x);
+
+    float sat = hsl.y*smoothstepfunction;
+
+    float hue_difference = target_hue-hsl.x;
+
+    float hslx = mix(hsl.x, target_hue, blend);
+    float hsly = mix(hsl.y, sat, (sat_c*blend));
+    float hslz = hsl.z;
+
+    if(checkbox == 1 && p_X < (p_Width/2+p_Width/10) && p_X > (p_Width/2-p_Width/10) && p_Y < (p_Height-p_Width/10) && p_Y > (p_Height-p_Width/5)) {
+    if(p_X < p_Width/2){
+    hslx = hue1;
+    }
+    else {
+    hslx = hue2;
+    }
+    hsly = 0.4f;
+    hslz = 0.5f;
+    }
+
+
+
+    float3 hsl_out = make_float3(hslx, hsly, hslz);
+
+    float3 rgb_out = HSLtoRGB(hsl_out);
+
+    float3 lum_out = RGB_Luminance(rgb_out, rgb);
+
+
+    if (lumfix == 1){
+     if (checkbox == 1 && p_X < (p_Width/2+p_Width/10) && p_X > (p_Width/2-p_Width/10) && p_Y < (p_Height-p_Width/10) && p_Y > (p_Height-p_Width/5)){
+     return rgb_out;
+     }
+     else {
+     return lum_out;
+     }
+    }
+    else {return rgb_out;
+    };
+
+}
+
+
+
+
+
+
+
+
+

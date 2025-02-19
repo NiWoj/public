@@ -1,0 +1,266 @@
+// NEUTRALS COLOUR SHIFT OFX DCTL
+
+DEFINE_UI_PARAMS(p_SPACE, Convert to LAB, DCTLUI_COMBO_BOX, 0, { ACESCCT, ALEXA, REC709 }, { ACEScct to LAB, Alexa LogC to LAB, Rec709 to LAB })
+
+DEFINE_UI_PARAMS(range, Range, DCTLUI_SLIDER_FLOAT, 0.02, 0.0, 0.2, 0.01)
+DEFINE_UI_PARAMS(pinkcyan, Cyan - Pink, DCTLUI_SLIDER_FLOAT, 0.0, -0.2, 0.2, 0.01)
+DEFINE_UI_PARAMS(yellowblue, Blue - Yellow, DCTLUI_SLIDER_FLOAT, 0.0, -0.2, 0.2, 0.01)
+DEFINE_UI_PARAMS(blackwhite, Protect Blacks, DCTLUI_CHECK_BOX, 1)
+
+__DEVICE__ float normalizedLogCToRelativeExposure( float x) {
+if (x > 0.149659f)
+return (_exp10f((x - 0.385537f) / 0.247189f) - 0.052272f) / 5.555556f;
+else
+return (x - 0.092809f) / 5.36765f;
+}
+
+__DEVICE__ float relativeExposureToLogC( float x) {
+if (x > 0.010591f)
+return 0.247190f * _log10f(5.555556f * x + 0.052272f) + 0.385537f;
+else
+return 5.367655f * x + 0.092809f;
+}
+
+__DEVICE__ float3 ArrilogC_to_XYZ( float3 Alexa) {
+float r_lin = normalizedLogCToRelativeExposure(Alexa.x);
+float g_lin = normalizedLogCToRelativeExposure(Alexa.y);
+float b_lin = normalizedLogCToRelativeExposure(Alexa.z);
+float3 XYZ;
+XYZ.x = r_lin * 0.638008f + g_lin * 0.214704f + b_lin * 0.097744f;
+XYZ.y = r_lin * 0.291954f + g_lin * 0.823841f - b_lin * 0.115795f;
+XYZ.z = r_lin * 0.002798f - g_lin * 0.067034f + b_lin * 1.153294f;
+return XYZ;
+}
+
+__DEVICE__ float3 XYZ_to_ArrilogC( float3 XYZ) {
+float3 Alexa;
+Alexa.x = XYZ.x * 1.789066f - XYZ.y * 0.482534f - XYZ.z * 0.200076f;
+Alexa.y = XYZ.x * -0.639849f + XYZ.y * 1.3964f + XYZ.z * 0.194432f;
+Alexa.z = XYZ.x * -0.041532f + XYZ.y * 0.082335f + XYZ.z * 0.878868f;
+Alexa.x = relativeExposureToLogC(Alexa.x);
+Alexa.y = relativeExposureToLogC(Alexa.y);
+Alexa.z = relativeExposureToLogC(Alexa.z);
+return Alexa;
+}
+
+__DEVICE__ float3 ACEScct_to_XYZ( float3 in) {
+const float Y_BRK = 0.155251141552511f;
+const float A = 10.5402377416545f;
+const float B = 0.0729055341958355f;
+float3 out;
+in.x = in.x > Y_BRK ? _powf( 2.0f, in.x * 17.52f - 9.72f) : (in.x - B) / A;
+in.y = in.y > Y_BRK ? _powf( 2.0f, in.y * 17.52f - 9.72f) : (in.y - B) / A;
+in.z = in.z > Y_BRK ? _powf( 2.0f, in.z * 17.52f - 9.72f) : (in.z - B) / A;
+out.x = 0.6624541811f * in.x + 0.1340042065f * in.y + 0.156187687f * in.z;
+out.y = 0.2722287168f * in.x + 0.6740817658f * in.y + 0.0536895174f * in.z;
+out.z = -0.0055746495f * in.x + 0.0040607335f * in.y + 1.0103391003f * in.z;
+return out;
+}
+
+__DEVICE__ float3 XYZ_to_ACEScct( float3 in) {
+const float X_BRK = 0.0078125f;
+const float A = 10.5402377416545f;
+const float B = 0.0729055341958355f;
+float3 out;
+out.x = 1.6410233797f * in.x + -0.3248032942f * in.y + -0.2364246952f * in.z;
+out.y = -0.6636628587f * in.x + 1.6153315917f * in.y + 0.0167563477f * in.z;
+out.z = 0.0117218943f * in.x + -0.008284442f * in.y + 0.9883948585f * in.z;
+out.x = out.x <= X_BRK ? A * out.x + B : (_log2f(out.x) + 9.72f) / 17.52f;
+out.y = out.y <= X_BRK ? A * out.y + B : (_log2f(out.y) + 9.72f) / 17.52f;
+out.z = out.z <= X_BRK ? A * out.z + B : (_log2f(out.z) + 9.72f) / 17.52f;
+return out;
+}
+
+__DEVICE__ float from_func_Rec709(float v) {
+if (v < 0.08145f)
+return (v < 0.0f) ? 0.0f : v * (1.0f / 4.5f);
+else
+return _powf( (v + 0.0993f) * (1.0f / 1.0993f), (1.0f / 0.45f) );
+}
+
+__DEVICE__ float to_func_Rec709(float v) {
+if (v < 0.0181f)
+return (v < 0.0f) ? 0.0f : v * 4.5f;
+else
+return 1.0993f * _powf(v, 0.45f) - 0.0993f;
+}
+
+__DEVICE__ float3 Rec709_to_XYZ( float3 rgb) {
+rgb.x = from_func_Rec709(rgb.x);
+rgb.y = from_func_Rec709(rgb.y);
+rgb.z = from_func_Rec709(rgb.z);
+float3 xyz;
+xyz.x = 0.4124564f * rgb.x + 0.3575761f * rgb.y + 0.1804375f * rgb.z;
+xyz.y = 0.2126729f * rgb.x + 0.7151522f * rgb.y + 0.0721750f * rgb.z;
+xyz.z = 0.0193339f * rgb.x + 0.1191920f * rgb.y + 0.9503041f * rgb.z;
+return xyz;
+}
+
+__DEVICE__ float3 XYZ_to_Rec709(float3 xyz) {
+float3 rgb;
+rgb.x =  3.2404542f * xyz.x + -1.5371385f * xyz.y + -0.4985314f * xyz.z;
+rgb.y = -0.9692660f * xyz.x +  1.8760108f * xyz.y +  0.0415560f * xyz.z;
+rgb.z =  0.0556434f * xyz.x + -0.2040259f * xyz.y +  1.0572252f * xyz.z;
+rgb.x = to_func_Rec709(rgb.x);
+rgb.y = to_func_Rec709(rgb.y);
+rgb.z = to_func_Rec709(rgb.z);
+return rgb;
+}
+
+__DEVICE__ float3 XYZ_to_LAB( float3 XYZ) {
+float fx, fy, fz;
+float Xn = 0.950489f;
+float Zn = 1.08884f;
+if (XYZ.x / Xn > 0.008856f)
+fx = _powf(XYZ.x / Xn, 1.0f / 3.0f);
+else
+fx = 7.787f * (XYZ.x / Xn) + 0.137931f;
+if (XYZ.y > 0.008856f)
+fy = _powf(XYZ.y, 1.0f / 3.0f);
+else
+fy = 7.787f * XYZ.y + 0.137931f;
+if (XYZ.z / Zn > 0.008856f)
+fz = _powf(XYZ.z / Zn, 1.0f / 3.0f);
+else
+fz = 7.787f * (XYZ.z / Zn) + 0.137931f;
+float3 Lab;
+Lab.x = 1.16f * fy - 0.16f;
+Lab.y = 2.5f * (fx - fy) + 0.5f;
+Lab.z = 1.0f * (fy - fz) + 0.5f;
+return Lab;
+}
+
+__DEVICE__ float3 LAB_to_XYZ( float3 LAB) {
+float3 XYZ;
+float Xn = 0.950489f;
+float Zn = 1.08884f;
+float cy = (LAB.x + 0.16f) / 1.16f;
+if (cy >= 0.206893f)
+XYZ.y = cy * cy * cy;
+else
+XYZ.y = (cy - 0.137931f) / 7.787f;
+float cx = (LAB.y - 0.5f) / 2.5f + cy;
+if (cx >= 0.206893f)
+XYZ.x = Xn * cx * cx * cx;
+else
+XYZ.x = Xn * (cx - 0.137931f) / 7.787f;
+float cz = cy - (LAB.z - 0.5f);
+if (cz >= 0.206893f)
+XYZ.z = Zn * cz * cz * cz;
+else
+XYZ.z = Zn * (cz - 0.137931f) / 7.787f;
+return XYZ;
+}
+
+__DEVICE__ float3 ArrilogC_to_LAB( float3 rgb) {
+float3 lab = ArrilogC_to_XYZ(rgb);
+lab = XYZ_to_LAB(lab);
+return lab;
+}
+
+__DEVICE__ float3 LAB_to_ArrilogC( float3 lab) {
+float3 rgb = LAB_to_XYZ(lab);
+rgb = XYZ_to_ArrilogC(rgb);
+return rgb;
+}
+
+__DEVICE__ float3 ACEScct_to_LAB( float3 rgb) {
+rgb = ACEScct_to_XYZ(rgb);
+float3 lab;
+lab.x = 0.987224f * rgb.x - 0.00611327f * rgb.y + 0.0159533f * rgb.z;
+lab.y = -0.00759836f * rgb.x + 1.00186f * rgb.y + 0.00533002f * rgb.z;
+lab.z = 0.00307257f * rgb.x - 0.00509595f * rgb.y + 1.08168f * rgb.z;
+lab = XYZ_to_LAB(lab);
+return lab;
+}
+
+__DEVICE__ float3 LAB_to_ACEScct( float3 lab) {
+lab = LAB_to_XYZ(lab);
+float3 rgb;
+rgb.x = 1.01303f * lab.x + 0.00610531f * lab.y - 0.014971f * lab.z;
+rgb.y = 0.00769823f * lab.x + 0.998165f * lab.y - 0.00503203f * lab.z;
+rgb.z = -0.00284131f * lab.x + 0.00468516f * lab.y + 0.924507f * lab.z;
+rgb = XYZ_to_ACEScct(rgb);
+return rgb;
+}
+
+__DEVICE__ float3 Rec709_to_LAB( float3 rgb) {
+float3 lab = Rec709_to_XYZ(rgb);
+lab = XYZ_to_LAB(lab);
+return lab;
+}
+
+__DEVICE__ float3 LAB_to_Rec709( float3 lab) {
+float3 rgb = LAB_to_XYZ(lab);
+rgb = XYZ_to_Rec709(rgb);
+return rgb;
+}
+
+__DEVICE__ float RGB_Luminance(float3 rgb, float blackwhite)
+{
+    float luminance = rgb.x*0.2126f + rgb.y*0.7152f + rgb.z*0.0722f;
+    float lum_out; 
+    lum_out = blackwhite == 1 ? smoothstep(0.0,0.15,luminance) - smoothstep(0.85,1.0,luminance) : 1.0;
+
+       
+    return lum_out;
+}
+
+
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B)
+{
+float3 rgb = make_float3(p_R, p_G, p_B);
+float3 lab = rgb;
+
+float point3 = 0.5+range*0.5;
+float point2 = ((point3-(1.0-point3))*0.5);
+
+float pcfactor = pinkcyan+(1.0-pinkcyan)*(1-point3)*2;
+float ybfactor = yellowblue+(1.0-yellowblue)*(1-point3)*2;
+
+float blacksafe = RGB_Luminance(rgb, blackwhite);
+
+switch (p_SPACE) {
+case ALEXA:
+{lab = ArrilogC_to_LAB(rgb);}
+break;
+case ACESCCT:
+{lab = ACEScct_to_LAB(rgb);}
+break;
+case REC709:
+{lab = Rec709_to_LAB(rgb);}}
+
+
+float tinty = lab.y + smoothstep(1.0-point3+0.00,
+                         point2 + (1.0-point3)+(1.0-pcfactor)*0.5,
+                         lab.y) 
+                         - 
+                         smoothstep( point2+ (1.0-point3)+(-(1.0-pcfactor)*0.5), 
+                         1.0*point3+0.0, 
+                         lab.y);
+
+float tintz = lab.z + smoothstep(1.0-point3+0.00,
+                         point2 + (1.0-point3)+(1.0-ybfactor)*0.5,
+                         lab.z) 
+                         - 
+                         smoothstep( point2+ (1.0-point3)+(-(1.0-ybfactor)*0.5), 
+                         1.0*point3+0.0, 
+                         lab.z);
+
+lab.y = lerp(lab.y, tinty, blacksafe);
+lab.z = lerp(lab.z, tintz, blacksafe);
+
+
+switch (p_SPACE) {
+case ALEXA:
+{rgb = LAB_to_ArrilogC(lab);}
+break;
+case ACESCCT:
+{rgb = LAB_to_ACEScct(lab);}
+break;
+case REC709:
+{rgb = LAB_to_Rec709(lab);}}
+
+return rgb;
+}

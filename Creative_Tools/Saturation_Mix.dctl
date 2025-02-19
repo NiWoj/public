@@ -1,0 +1,350 @@
+// Skin Tone Compressor DCTL
+// Mixes HSL sat in the lower with HSV sat in the higher end
+
+DEFINE_UI_PARAMS(sat_gain, Saturation Gain, DCTLUI_SLIDER_FLOAT, 1.0, 0.0, 2.0, 0.1)
+DEFINE_UI_PARAMS(sat_gamma, Saturation Gamma, DCTLUI_SLIDER_FLOAT, 1.0, 0.0, 3.0, 0.1)
+DEFINE_UI_PARAMS(CST, Input Gamma, DCTLUI_COMBO_BOX, 0, { DWG, ACESCCT, LOGC3, NONE }, { Davinci Intermediate, ACEScct, LogC3, None })
+
+__DEVICE__ float3 DWG_to_Linear(float3 rgb)
+{
+    float DI_A = 0.0075f;
+    float DI_B = 7.0f;
+    float DI_C = 0.07329248f;
+    float DI_M = 10.44426855f;
+    float DI_LOG_CUT = 0.02740668f;
+   
+
+    float R = _powf(2.0, (rgb.x / DI_C) - DI_B)-DI_A;
+
+    if (rgb.x<DI_LOG_CUT){
+    R = rgb.x/DI_M;
+    }
+    else {
+    R = _powf(2.0, (rgb.x / DI_C) - DI_B)-DI_A;
+    }
+
+    float G = _powf(2.0, (rgb.y / DI_C) - DI_B)-DI_A;
+
+    if (rgb.y<DI_LOG_CUT){
+    G = rgb.y/DI_M;
+    }
+    else {
+    G = _powf(2.0, (rgb.y / DI_C) - DI_B)-DI_A;
+    }
+
+    float B = _powf(2.0, (rgb.z / DI_C) - DI_B)-DI_A;
+
+    if (rgb.z<DI_LOG_CUT){
+    B = rgb.z/DI_M;
+    }
+    else {
+    B = _powf(2.0, (rgb.z / DI_C) - DI_B)-DI_A;
+    }
+
+    const float3 L = make_float3(R, G, B);
+
+    return L;
+}
+
+__DEVICE__ float3 Linear_to_DWG(float3 curve)
+{
+    float DI_A = 0.0075f;
+    float DI_B = 7.0f;
+    float DI_C = 0.07329248f;
+    float DI_M = 10.44426855f;
+    float DI_LIN_CUT = 0.00262409f;
+
+
+    float R = curve.x<DI_LIN_CUT ? curve.x*DI_M : (log2(curve.x + DI_A) + DI_B)*DI_C;
+
+
+    float G = curve.y<DI_LIN_CUT ? curve.y*DI_M : (log2(curve.y + DI_A) + DI_B)*DI_C;
+
+    float B = curve.z<DI_LIN_CUT ? curve.z*DI_M : (log2(curve.z + DI_A) + DI_B)*DI_C;
+
+
+    const float3 V = make_float3(R, G, B);
+
+    return V;
+}
+
+__DEVICE__ float3 ACES_CCT_to_Linear(float3 rgb)
+{
+    float ACES_LoCut = 0.155251141552511f;
+    float ACES_HiCut = (log2f(65504) + 9.72)/17.52f;
+
+    float R;
+
+    if (rgb.x >= ACES_LoCut && rgb.x < ACES_HiCut){
+        R = _powf(2,(rgb.x*17.52f-9.72f));
+    }
+    else if (rgb.x <= ACES_LoCut){
+        R = (rgb.x-0.0729055341958355f)/10.5402377416545f;
+    }
+
+    else {R = 65504.f;
+    }
+
+    float G;
+
+    if (rgb.y >= ACES_LoCut && rgb.y < ACES_HiCut){
+        G = _powf(2,(rgb.y*17.52f-9.72f));
+    }
+
+    else if (rgb.y <= ACES_LoCut){
+        G = (rgb.y-0.0729055341958355f)/10.5402377416545f;
+    }
+    else {G = 65504.f;};
+
+    float B;
+
+    if (rgb.z >= ACES_LoCut && rgb.z < ACES_HiCut){
+        B = _powf(2,(rgb.z*17.52f-9.72f));
+    }
+    else if (rgb.z <= ACES_LoCut){
+        B = (rgb.z-0.0729055341958355f)/10.5402377416545f;
+    }
+    else {B = 65504.f;}
+
+
+    float3 L = make_float3(R, G, B);
+
+    return L;
+}
+
+__DEVICE__ float3 Linear_to_ACES_CCT(float3 curve)
+{
+    float Lin_Cut = 0.0078125f;
+
+    float R = curve.x <= Lin_Cut ? 10.5402377416545 * curve.x * 0.0729055341958355 : (log2(curve.x) + 9.72f)/17.52f;
+
+    float G = curve.y <= Lin_Cut ? 10.5402377416545 * curve.y * 0.0729055341958355 : (log2(curve.y) + 9.72f)/17.52f;
+
+    float B = curve.z <= Lin_Cut ? 10.5402377416545 * curve.z * 0.0729055341958355 : (log2(curve.z) + 9.72f)/17.52f;
+
+    const float3 V = make_float3(R, G, B);
+
+    return V;
+}
+
+
+__DEVICE__ float3 ARRI_LogC3_to_Linear(float3 rgb)
+{
+    float cut = 0.004201f;
+    float a = 200.0f;
+    float b = -0.729169f;
+    float c = 0.247190f;
+    float d = 0.385537f;
+    float e = 193.235573f;
+    float f = -0.662201f;
+
+    float R = (rgb.x > e * cut + f) ? (_powf(10, (rgb.x - d) / c) - b) / a: (rgb.x - f) / e;
+
+    float G = (rgb.y > e * cut + f) ? (_powf(10, (rgb.y - d) / c) - b) / a: (rgb.y - f) / e;
+
+    float B = (rgb.z > e * cut + f) ? (_powf(10, (rgb.z - d) / c) - b) / a: (rgb.z - f) / e;
+
+    const float3 L = make_float3(R, G, B);
+
+    return L;
+}
+
+__DEVICE__ float3 Linear_to_ARRI_LogC3(float3 curve)
+{
+    float cut = 0.004201f;
+    float a = 200.0f;
+    float b = -0.729169f;
+    float c = 0.247190f;
+    float d = 0.385537f;
+    float e = 193.235573f;
+    float f = -0.662201f;
+
+    float R = (curve.x > cut) ? c * log10(a * curve.x + b) + d: e * curve.x + f;
+
+    float G = (curve.y > cut) ? c * log10(a * curve.y + b) + d: e * curve.y + f;
+
+    float B = (curve.z > cut) ? c * log10(a * curve.z + b) + d: e * curve.z + f;
+
+    const float3 V = make_float3(R, G, B);
+
+    return V;
+}
+
+
+__DEVICE__ float3 RGBtoHSL( float3 input)
+{
+        // RGB to HSL
+    
+    
+    const float R = input.x;
+    const float G = input.y;
+    const float B = input.z;
+    
+    const float Min = _fminf(R, _fminf(G, B));    
+    const float Max = _fmaxf(R, _fmaxf(G, B));    
+    const float del_Max = Max - Min;             
+
+    const float l = (Max + Min) / 2.0f;
+    const float s = del_Max == 0.0f ? 0.0f : (l < 0.5f ? del_Max / (Max + Min) : del_Max / (2.0f - Max - Min));
+    
+    const float del_R = (((Max - R) / 6.0f) + (del_Max / 2.0f)) / del_Max;
+    const float del_G = (((Max - G) / 6.0f) + (del_Max / 2.0f)) / del_Max;
+    const float del_B = (((Max - B) / 6.0f) + (del_Max / 2.0f)) / del_Max;
+   
+    const float h = del_Max == 0.0f ? 0.0f : (R == Max ? del_B - del_G : (G == Max ? (1.0f / 3.0f) + del_R - del_B : (2.0f / 3.0f) + del_G - del_R));
+
+
+
+    const float3 hsl = make_float3(h, s, l);
+
+    return hsl;
+}
+
+
+__DEVICE__ float3 HSLtoRGB( float3 input)
+{
+     // HSL to RGB
+     const float h = input.x;
+     const float s = input.y;
+     const float l = input.z;
+
+    const float Q = (l < 0.5f) ? (l * (1.0f + s)) : (l + s - l * s);
+    const float P = (2.0f * l - Q);
+
+    const float RH = ((h + 1.0f / 3.0f) < 0.0f) ? ((h + 1.0f / 3.0f) + 1.0f) :
+    (((h + 1.0f / 3.0f) > 1.0f) ? ((h + 1.0f / 3.0f) - 1.0f) : (h + 1.0f / 3.0f));
+    
+    const float RR = (RH < 1.0f / 6.0f) ? (P + (Q - P) * 6.0f * RH) : 
+    ((RH < 1.0f / 2.0f) ? Q : ((RH < 2.0f / 3.0f) 
+    ? (P + (Q - P) * (2.0f / 3.0f - RH) * 6.0f) : P));
+
+    const float GH = (h < 0.0f) ? (h + 1.0f) :
+    ((h > 1.0f) ? (h - 1.0f) : h);
+
+    const float GG = (GH < 1.0f / 6.0f) ? (P + (Q - P) * 6.0f * GH) :
+    ((GH < 1.0f / 2.0f) ? Q :
+    ((GH < 2.0f / 3.0f) ? (P + (Q - P) * (2.0f / 3.0f - GH) * 6.0f) : P));
+
+    const float BH = ((h - 1.0f / 3.0f) < 0.0f) ? ((h - 1.0f / 3.0f) + 1.0f) :
+    (((h - 1.0f / 3.0f) > 1.0f) ? ((h - 1.0f / 3.0f) - 1.0f) : (h - 1.0f / 3.0f));
+    
+    const float BB = (BH < 1.0f / 6.0f) ? (P + (Q - P) * 6.0f * BH) :
+    ((BH < 1.0f / 2.0f) ? Q :
+    ((BH < 2.0f / 3.0f) ? (P + (Q - P) * (2.0f / 3.0f - BH) * 6.0f) : P));
+    
+    
+    const float r = s == 0.0f ? l : RR;
+    const float g = s == 0.0f ? l : GG;
+    const float b = s == 0.0f ? l : BB;
+    
+    float3 rgb_return = make_float3(r, g, b);
+        
+    return rgb_return;
+}
+
+
+__DEVICE__ float3 RGB_to_HSV( float3 RGB ) {
+float3 HSV;
+float min = _fminf(_fminf(RGB.x, RGB.y), RGB.z);
+float max = _fmaxf(_fmaxf(RGB.x, RGB.y), RGB.z);
+HSV.z = max;
+float delta = max - min;
+if (max != 0.0f) {
+HSV.y = delta / max;
+} else {
+HSV.y = 0.0f;
+HSV.x = 0.0f;
+return HSV;
+}
+if (delta == 0.0f) {
+HSV.x = 0.0f;
+} else if (RGB.x == max) {
+HSV.x = (RGB.y - RGB.z) / delta;
+} else if (RGB.y == max) {
+HSV.x = 2.0f + (RGB.z - RGB.x) / delta;
+} else {
+HSV.x = 4.0f + (RGB.x - RGB.y) / delta;
+}
+HSV.x *= 1.0f / 6.0f;
+if (HSV.x < 0.0f)
+HSV.x += 1.0f;
+return HSV;
+}
+
+__DEVICE__ float3 HSV_to_RGB(float3 HSV) {
+float3 RGB;
+if (HSV.y == 0.0f) {
+RGB.x = RGB.y = RGB.z = HSV.z;
+} else {
+HSV.x *= 6.0f;
+int i = floor(HSV.x);
+float f = HSV.x - i;
+i = (i >= 0) ? (i % 6) : (i % 6) + 6;
+float p = HSV.z * (1.0f - HSV.y);
+float q = HSV.z * (1.0f - HSV.y * f);
+float t = HSV.z * (1.0f - HSV.y * (1.0f - f));
+RGB.x = i == 0 ? HSV.z : i == 1 ? q : i == 2 ? p : i == 3 ? p : i == 4 ? t : HSV.z;
+RGB.y = i == 0 ? t : i == 1 ? HSV.z : i == 2 ? HSV.z : i == 3 ? q : i == 4 ? p : p;
+RGB.z = i == 0 ? p : i == 1 ? p : i == 2 ? t : i == 3 ? HSV.z : i == 4 ? HSV.z : q;
+}
+return RGB;
+}
+
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B)
+{
+    
+    float3 in = {p_R, p_G, p_B};
+
+    float3 lin;
+    switch (CST) {
+    case DWG:
+    {lin = DWG_to_Linear(in);}
+    break;
+    case LOGC3:
+    {lin = ARRI_LogC3_to_Linear(in);}
+    case ACESCCT:
+    {lin = ACES_CCT_to_Linear(in);}
+    case NONE:
+    {lin = in;}
+
+    };
+
+    float3 hsv_in = RGB_to_HSV( lin );
+    float3 hsl_in = RGBtoHSL( lin );
+
+    float3 hsv_saturation = {hsv_in.x, _powf(hsv_in.y, 1 / sat_gamma)*sat_gain, hsv_in.z};
+    float3 hsl_saturation = {hsl_in.x, _powf(hsl_in.y, 1 / sat_gamma)*sat_gain, hsl_in.z};
+
+    float3 hsv_out = HSV_to_RGB(hsv_saturation);
+    float3 hsl_out = HSLtoRGB(hsl_saturation);
+
+    float3 mix = hsv_saturation.y >= hsv_in.y ? hsv_out : hsl_out;
+
+    float3 out;
+   switch (CST) {
+    case DWG:
+    {out = Linear_to_DWG(mix);}
+    break;
+    case LOGC3:
+    {out = Linear_to_ARRI_LogC3(mix);}
+    case ACESCCT:
+    {out = Linear_to_ACES_CCT(mix);}
+    case NONE:
+    {out = mix;}
+    };
+
+    
+
+    return out;
+}
+
+
+
+
+
+
+
+
+
+
