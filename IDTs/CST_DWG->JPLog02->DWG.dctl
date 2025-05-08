@@ -1,0 +1,138 @@
+// JPLog02 / DWG TRANSFORM 
+#line 3
+//Adapted from Dado Velentic's JPLog02 DCTLs for ACES
+
+
+DEFINE_UI_PARAMS(CST, Transform, DCTLUI_COMBO_BOX, 0, { DWG, JPLog02}, { DWG to JPLog02, JPLog02 to DWG })
+
+__DEVICE__ float3 DWG_to_Linear(float3 rgb)
+{
+    float DI_A = 0.0075f;
+    float DI_B = 7.0f;
+    float DI_C = 0.07329248f;
+    float DI_M = 10.44426855f;
+    float DI_LOG_CUT = 0.02740668f;
+   
+
+    float R = _powf(2.0, (rgb.x / DI_C) - DI_B)-DI_A;
+
+    if (rgb.x<=DI_LOG_CUT){
+    R = rgb.x/DI_M;
+    }
+    else {
+    R = _powf(2.0, (rgb.x / DI_C) - DI_B)-DI_A;
+    }
+
+    float G = _powf(2.0, (rgb.y / DI_C) - DI_B)-DI_A;
+
+    if (rgb.y<=DI_LOG_CUT){
+    G = rgb.y/DI_M;
+    }
+    else {
+    G = _powf(2.0, (rgb.y / DI_C) - DI_B)-DI_A;
+    }
+
+    float B = _powf(2.0, (rgb.z / DI_C) - DI_B)-DI_A;
+
+    if (rgb.z<=DI_LOG_CUT){
+    B = rgb.z/DI_M;
+    }
+    else {
+    B = _powf(2.0, (rgb.z / DI_C) - DI_B)-DI_A;
+    }
+
+    const float3 L = make_float3(R, G, B);
+
+    return L;
+}
+
+__DEVICE__ float3 Linear_to_DWG(float3 curve)
+{
+    float DI_A = 0.0075;
+    float DI_B = 7.0;
+    float DI_C = 0.07329248;
+    float DI_M = 10.44426855;
+    float DI_LIN_CUT = 0.00262409;
+
+
+    float R = curve.x<=DI_LIN_CUT ? curve.x*DI_M : (log2(curve.x + DI_A) + DI_B)*DI_C;
+
+
+    float G = curve.y<=DI_LIN_CUT ? curve.y*DI_M : (log2(curve.y + DI_A) + DI_B)*DI_C;
+
+    float B = curve.z<=DI_LIN_CUT ? curve.z*DI_M : (log2(curve.z + DI_A) + DI_B)*DI_C;
+
+
+    const float3 V = make_float3(R, G, B);
+
+    return V;
+}
+
+
+__DEVICE__ float3 jplog2_to_lin(float3 in) {
+
+  float JPLOG2_LIN_BRKPNT = 0.00680f;
+  float JPLOG2_LOG_BRKPNT = 0.16129f;
+  float JPLOG2_LINTOLOG_SLOPE = 10.367739f;
+  float JPLOG2_LINTOLOG_YINT = 0.0907775f;
+
+    float3 lin;
+
+    lin.x = in.x <= JPLOG2_LOG_BRKPNT ? (in.x - JPLOG2_LINTOLOG_YINT) / JPLOG2_LINTOLOG_SLOPE : pow(2.0f, in.x * 20.46f - 10.5f); 
+
+    lin.y = in.y <= JPLOG2_LOG_BRKPNT ? (in.y - JPLOG2_LINTOLOG_YINT) / JPLOG2_LINTOLOG_SLOPE : pow(2.0f, in.y * 20.46f - 10.5f); 
+
+    lin.z = in.z <= JPLOG2_LOG_BRKPNT ? (in.z - JPLOG2_LINTOLOG_YINT) / JPLOG2_LINTOLOG_SLOPE : pow(2.0f, in.z * 20.46f - 10.5f); 
+   
+
+    return lin;
+}
+
+__DEVICE__ float3 lin_to_jplog2(float3 in) {
+
+  float JPLOG2_LIN_BRKPNT = 0.00680f;
+  float JPLOG2_LOG_BRKPNT = 0.16129f;
+  float JPLOG2_LINTOLOG_SLOPE = 10.367739f;
+  float JPLOG2_LINTOLOG_YINT = 0.0907775f;
+
+  float3 log;
+
+  log.x = in.x <= JPLOG2_LIN_BRKPNT ? JPLOG2_LINTOLOG_SLOPE * in.x + JPLOG2_LINTOLOG_YINT : (log2(in.x) + 10.5f) / 20.46f;
+
+  log.y = in.y <= JPLOG2_LIN_BRKPNT ? JPLOG2_LINTOLOG_SLOPE * in.y + JPLOG2_LINTOLOG_YINT : (log2(in.y) + 10.5f) / 20.46f;
+
+  log.z = in.x <= JPLOG2_LIN_BRKPNT ? JPLOG2_LINTOLOG_SLOPE * in.z + JPLOG2_LINTOLOG_YINT : (log2(in.z) + 10.5f) / 20.46f;
+
+
+    return log; 
+}
+
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B)
+{
+
+    float3 rgb = {p_R, p_G, p_B};
+
+    float3 lin;
+    
+    switch (CST) {
+    case DWG:
+    {lin = DWG_to_Linear( rgb );}
+    break;
+    case JPLog02:
+    {lin = jplog2_to_lin( rgb );}
+    };
+
+    float3 out;
+
+    switch (CST) {
+    case DWG:
+    {out = lin_to_jplog2( lin );}
+    break;
+    case JPLog02:
+    {out = Linear_to_DWG(lin);}
+    };
+
+
+    return out;
+}
