@@ -1,6 +1,6 @@
 // JPLog02 / DWG TRANSFORM 
 #line 3
-//Adapted from Dado Velentic's JPLog02 DCTLs for ACES
+//Adapted from Dado Valentic's JPLog02 DCTLs for ACES
 
 
 DEFINE_UI_PARAMS(CST, Transform, DCTLUI_COMBO_BOX, 0, { DWG, JPLog02}, { DWG to JPLog02, JPLog02 to DWG })
