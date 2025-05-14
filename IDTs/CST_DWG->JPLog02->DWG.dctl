@@ -1,9 +1,9 @@
-// JPLog02 / DWG TRANSFORM 
+// JPLog02 / Davinci Intermediate TRANSFORM 
 #line 3
 //Adapted from Dado Valentic's JPLog02 DCTLs for ACES
 
 
-DEFINE_UI_PARAMS(CST, Transform, DCTLUI_COMBO_BOX, 0, { DWG, JPLog02}, { DWG to JPLog02, JPLog02 to DWG })
+DEFINE_UI_PARAMS(CST, Transform, DCTLUI_COMBO_BOX, 0, { DWG, JPLog02}, { DV Intermediate to JPLog02, JPLog02 to DV Intermediate })
 
 __DEVICE__ float3 DWG_to_Linear(float3 rgb)
 {
