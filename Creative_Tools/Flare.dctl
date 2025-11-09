@@ -1,7 +1,6 @@
 
 DEFINE_UI_PARAMS(flare, Flare, DCTLUI_SLIDER_FLOAT, 0.0, -1.0, 5.0, 0.1)
 DEFINE_UI_PARAMS(CST, Colour Space, DCTLUI_COMBO_BOX, 0, {DWG, LOGC3, ACESCCT }, { Davinci Intermediate, ARRI LogC3, Aces CCT})
-DEFINE_UI_PARAMS(toe, Protect Blacks, DCTLUI_CHECK_BOX, 0)
 
 
 
@@ -204,10 +203,6 @@ __DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p
     out.x = mix(lift_op.x, rgb.x, rgb.x < thrsh ? rgb.x/thrsh : 1.0);
     out.y = mix(lift_op.y, rgb.y, rgb.y < thrsh ? rgb.y/thrsh : 1.0);
     out.z = mix(lift_op.z, rgb.z, rgb.z < thrsh ? rgb.z/thrsh : 1.0);
-
-    out.x = out.x < 0.001333154 && toe==1 ? exp(out.x*3000-2.79602734)/10000 +0.001 : out.x;
-    out.y = out.y < 0.001333154 && toe==1 ? exp(out.y*3000-2.79602734)/10000 +0.001 : out.y;
-    out.z = out.z < 0.001333154 && toe==1 ? exp(out.z*3000-2.79602734)/10000 +0.001 : out.z;
 
      switch (CST) {
     case DWG:
