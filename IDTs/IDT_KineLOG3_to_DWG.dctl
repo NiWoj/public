@@ -1,0 +1,97 @@
+// IDT KINELOG3 LOG to DAVINCI WIDE GAMUT/DAVINCI INTERMEDIATE
+
+
+__DEVICE__ float3 KineLOG3_to_Linear(float3 rgb)
+{
+    float a = 66.64;
+    float b = 0.296;
+    float c = 0.907136;
+    float d = 0.092864;
+    float cut = -0.008239;
+    float s = 0.017178;
+
+    float3 lin;
+    lin.x = rgb.x >= 0 ? (pow(10, (rgb.x-d)/b/c) - 1.f)/a : rgb.x * s + cut;
+    lin.y = rgb.x >= 0 ? (pow(10, (rgb.y-d)/b/c) - 1.f)/a : rgb.y * s + cut;
+    lin.z = rgb.x >= 0 ? (pow(10, (rgb.z-d)/b/c) - 1.f)/a : rgb.z * s + cut;
+
+    return lin;
+}
+
+
+
+__DEVICE__ float3 Linear_to_DWG(float3 curve)
+{
+    float DI_A = 0.0075f;
+    float DI_B = 7.0f;
+    float DI_C = 0.07329248f;
+    float DI_M = 10.44426855f;
+    float DI_LIN_CUT = 0.00262409f;
+
+
+
+    float R = curve.x<DI_LIN_CUT ? curve.x*DI_M : (log2(curve.x + DI_A) + DI_B)*DI_C;
+    float G = curve.y<DI_LIN_CUT ? curve.y*DI_M : (log2(curve.y + DI_A) + DI_B)*DI_C;
+    float B = curve.z<DI_LIN_CUT ? curve.z*DI_M : (log2(curve.z + DI_A) + DI_B)*DI_C;
+
+    const float3 V = make_float3(R, G, B);
+
+    return V;
+}
+
+__DEVICE__ float3 CIE_XYZ_to_DavinciWideGamut(float3 rgb) {
+    
+    float3x3 M_A_to_B = float3x3(
+        1.51667204f,  -0.28147805f,  0.10105872f,
+        0.27411851f,  0.87363190f,  -0.14775041f,
+       -0.09896291, -0.13789533f, 1.32591599
+    );
+
+
+    // Apply the matrix transformation
+     float3 out = make_float3(
+            M_A_to_B[0][0] * rgb.x + M_A_to_B[0][1] * rgb.y + M_A_to_B[0][2] * rgb.z,
+            M_A_to_B[1][0] * rgb.x + M_A_to_B[1][1] * rgb.y + M_A_to_B[1][2] * rgb.z,
+            M_A_to_B[2][0] * rgb.x + M_A_to_B[2][1] * rgb.y + M_A_to_B[2][2] * rgb.z
+        );
+
+    return out;
+}
+
+__DEVICE__ float3 KinefinityWideGamut_to_CIE_XYZ(float3 rgb) {
+    
+    float3x3 M_A_to_B = float3x3(
+        1.5240f,  -0.3255f,  -0.1320f,
+        -0.3190f,  1.0445f,  0.2142f,
+       -0.0912f, 0.2541f, 0.7523f
+    );
+
+
+    // Apply the matrix transformation
+     float3 out = make_float3(
+            M_A_to_B[0][0] * rgb.x + M_A_to_B[0][1] * rgb.y + M_A_to_B[0][2] * rgb.z,
+            M_A_to_B[1][0] * rgb.x + M_A_to_B[1][1] * rgb.y + M_A_to_B[1][2] * rgb.z,
+            M_A_to_B[2][0] * rgb.x + M_A_to_B[2][1] * rgb.y + M_A_to_B[2][2] * rgb.z
+        );
+
+    return out;
+}
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B)
+{
+   
+    
+    float3 in = {p_R, p_G, p_B};
+
+    float3 linear = KineLOG3_to_Linear(in);
+
+    float3 KWGtoXYZ = KinefinityWideGamut_to_CIE_XYZ(linear);
+
+    float3 XYZtoDWG = CIE_XYZ_to_DavinciWideGamut(KWGtoXYZ);
+
+
+    float3 out = Linear_to_DWG(XYZtoDWG);
+
+
+    return out;
+}
