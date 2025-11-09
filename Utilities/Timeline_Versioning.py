@@ -37,12 +37,36 @@ def increment_letter(label):
     return 'A' + ''.join(letters)
 
 def generate_unique_timeline_name(base_name):
-    suffix = ''
-    final_name = base_name
-    while get_timeline_by_name(project, final_name):
-        suffix = increment_letter(suffix or 'A')  # 'A', 'B', 'C'...
-        final_name = f"{base_name}_{suffix}"
-    return final_name
+    """
+    Generate a unique timeline name by intelligently incrementing version suffixes.
+    For example:
+    'Timeline_250803'      → 'Timeline_250803_A'
+    'Timeline_250803_A'    → 'Timeline_250803_B'
+    'Timeline_250803_B'    → 'Timeline_250803_C'
+    """
+    final_name = base_name.strip()
+
+    # Pattern to detect existing suffix like "_A", "_B", etc.
+    match = re.search(r"(.*?)(?:_([A-Z]+))?$", final_name)
+    if match:
+        base = match.group(1)
+        current_suffix = match.group(2)
+    else:
+        base = final_name
+        current_suffix = None
+
+    # Start with the next logical suffix
+    suffix = increment_letter(current_suffix) if current_suffix else None
+    candidate = f"{base}"
+    if suffix != None:
+        candidate = f"{base}_{suffix}"
+
+    # Loop until no conflict
+    while get_timeline_by_name(project, candidate):
+        suffix = increment_letter(suffix)
+        candidate = f"{base}_{suffix}"
+
+    return candidate
 
 
 def get_timeline_by_name(project, name):
@@ -112,7 +136,7 @@ if compact_date in t_name:
             timeline = get_timeline_by_name(project, f"{t_name}_A")
         else:
             print(f"🔴 Renaming '{timeline.GetName()}' failed")
-    #elif name ends with "_suffix" eg. (timelinename_250724_D)
+    #elif name ends with "currentdate_suffix" eg. (timelinename_250724_D)
     elif re.search(rf"{compact_date}_([A-Z]+)$", t_name):
         #duplicate current timeline and name the duplicate "original timeline name_(letter+1)" eg. "timelinename_250724_E"
         pattern = re.search(r"(.*_)([A-Z]+)$", t_name)
@@ -130,6 +154,7 @@ if compact_date in t_name:
             print(f"🟢 Created new timeline '{new_version}'")
         else:
             print(f"🔴 Failed to create a new timeline")
+
     else:
         new_version = generate_unique_timeline_name(f"{t_name}_{compact_date}")
         if new_version:
@@ -147,19 +172,17 @@ if compact_date in t_name:
 #else:
 else:
     #if name ends in other date:
-    if re.search(r"(.*?)[_\-]([0-9]{6})$", t_name):
-        print("🟢 Current timeline ends with older date")
-        pattern = re.search(r"(.*?)[_\-]([0-9]{6})$", t_name)
+    if re.search(r"[_\-]\d{6}(?:_[A-Z]+)?$", t_name):
+        print("🟢 Current timeline includes older date")
     
         # Replace old date with today’s compact date
-        base_version = f"{pattern.group(1)}_{compact_date}"
+        base_version = re.sub(r"[_\-]\d{6}(?:_[A-Z]+)?$", f"_{compact_date}", t_name)
 
         # Check if a timeline with that name already exists
         existing = get_timeline_by_name(project, base_version)
         if existing:
             print("🟡 Timeline with current date already exists")
-            # Rename the existing one to "_A"
-            new_existName = generate_unique_timeline_name(f"{base_version}_A")
+            new_existName = generate_unique_timeline_name(f"{base_version}")
             rename = existing.SetName(new_existName)
             if rename:
                 print(f"🟢 Renamed '{timeline.GetName()}' to '{new_existName}' ")
@@ -190,20 +213,6 @@ else:
         else:
             print(f"🔴 Failed to create a new timeline")
 
-    #elif name ends in ..._date_suffix
-    elif re.search(r"([0-9]{6})_([A-Z]+)$", t_name):
-        pattern = r"([0-9]{6})_([A-Z]+)$"
-        #duplicate timeline and name name_currentdate
-        new_version = generate_unique_timeline_name(f"{t_name.replace(pattern, compact_date)}")
-        if new_version:
-            print(f"🟢 New version name set to be '{new_version}'")
-        else:
-            print(f"🔴 Generating a new timeline name failed")
-        new_timeline = timeline.DuplicateTimeline(f"{new_version}")
-        if new_timeline:
-            print(f"🟢 Created new timeline '{new_version}'")
-        else:
-            print(f"🔴 Failed to create a new timeline")
     #else:
     else:
         #duplicate current timeline and name the duplicate "original timeline name_currentdate"
@@ -233,6 +242,9 @@ for folder in subfolders:
     if "archive" in folder.GetName().lower():
         archive = folder
         break
+if t_folder.GetName().lower() == "archive":
+    archive = t_folder
+
 #if not
 if archive is None:
     print("🟡 No folder 'Archive' (or similar) found")
@@ -274,5 +286,4 @@ else:
 #Save project
 projectManager.SaveProject()
 sys.exit()
-
 
