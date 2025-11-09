@@ -1,5 +1,5 @@
 
-DEFINE_UI_PARAMS(flare, Flare, DCTLUI_SLIDER_FLOAT, 0.0, -1.0, 1.0, 0.1)
+DEFINE_UI_PARAMS(flare, Flare, DCTLUI_SLIDER_FLOAT, 0.0, -1.0, 5.0, 0.1)
 DEFINE_UI_PARAMS(CST, Colour Space, DCTLUI_COMBO_BOX, 0, {DWG, LOGC3, ACESCCT }, { Davinci Intermediate, ARRI LogC3, Aces CCT})
 DEFINE_UI_PARAMS(toe, Protect Blacks, DCTLUI_CHECK_BOX, 0)
 
