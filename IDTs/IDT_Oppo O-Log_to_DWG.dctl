@@ -1,5 +1,6 @@
 // IDT REC2020/OPPO O-LOG to DAVINCI WIDE GAMUT/DAVINCI INTERMEDIATE
 
+DEFINE_UI_PARAMS(logf, Log Curve, DCTLUI_COMBO_BOX, 0, { olog, olog2 }, { O-Log, O-Log2})
 
 
 __DEVICE__ float OLog_to_Linear(float P)
@@ -17,6 +18,12 @@ __DEVICE__ float OLog_to_Linear(float P)
     return lin;
 }
 
+__DEVICE__ float Olog2_to_Linear(float P)
+{
+   float lin = (_expf((P - 0.693f) / 0.0855f * log(2.0f)) - 0.0096f);
+
+   return lin;
+}
 
 
 __DEVICE__ float3 Linear_to_DWG(float3 curve)
@@ -66,9 +73,9 @@ __DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p
     
     float3 in = {p_R, p_G, p_B};
 
-    float linR = OLog_to_Linear(in.x);
-    float linG = OLog_to_Linear(in.y);
-    float linB = OLog_to_Linear(in.z);
+    float linR = logf == 0 ? OLog_to_Linear(in.x) : Olog2_to_Linear(in.x);
+    float linG = logf == 0 ? OLog_to_Linear(in.y) : Olog2_to_Linear(in.y);
+    float linB = logf == 0 ? OLog_to_Linear(in.z) : Olog2_to_Linear(in.z);
     float3 linear = make_float3(linR, linG, linB);
 
     float3 R2020toDWG = Rec2020_to_DWG(linear);
