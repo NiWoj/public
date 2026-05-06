@@ -1,0 +1,81 @@
+// IDT REC2020/OPPO O-LOG to DAVINCI WIDE GAMUT/DAVINCI INTERMEDIATE
+
+
+
+__DEVICE__ float OLog_to_Linear(float P)
+{
+    float y = 0.139f;
+    float b = 0.019f;
+    float g = 0.614f;
+    float R = 0.0631271f;
+
+    P = _fminf(_fmaxf(P, R), 1.0f);
+   
+    float lin = _expf((P - g) / y) - b;
+
+
+    return lin;
+}
+
+
+
+__DEVICE__ float3 Linear_to_DWG(float3 curve)
+{
+    float DI_A = 0.0075f;
+    float DI_B = 7.0f;
+    float DI_C = 0.07329248f;
+    float DI_M = 10.44426855f;
+    float DI_LIN_CUT = 0.00262409f;
+
+
+
+    float R = curve.x<DI_LIN_CUT ? curve.x*DI_M : (log2(curve.x + DI_A) + DI_B)*DI_C;
+
+    float G = curve.y<DI_LIN_CUT ? curve.y*DI_M : (log2(curve.y + DI_A) + DI_B)*DI_C;
+
+    float B = curve.z<DI_LIN_CUT ? curve.z*DI_M : (log2(curve.z + DI_A) + DI_B)*DI_C;
+
+
+    const float3 V = make_float3(R, G, B);
+
+    return V;
+}
+
+__DEVICE__ float3 Rec2020_to_DWG(float3 rgb) {
+    // Conversion matrix from Rec.2020 to DaVinci Wide Gamut
+    float3x3 M_A_to_B = float3x3(
+        0.8921,  0.0244,  0.0835,
+        0.0326,  0.7861,  0.1812,
+       0.0700, 0.1047, 0.8253
+    );
+
+
+    // Apply the matrix transformation
+     float3 out = make_float3(
+            M_A_to_B[0][0] * rgb.x + M_A_to_B[0][1] * rgb.y + M_A_to_B[0][2] * rgb.z,
+            M_A_to_B[1][0] * rgb.x + M_A_to_B[1][1] * rgb.y + M_A_to_B[1][2] * rgb.z,
+            M_A_to_B[2][0] * rgb.x + M_A_to_B[2][1] * rgb.y + M_A_to_B[2][2] * rgb.z
+        );
+
+    return out;
+}
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B)
+{
+   
+    
+    float3 in = {p_R, p_G, p_B};
+
+    float linR = OLog_to_Linear(in.x);
+    float linG = OLog_to_Linear(in.y);
+    float linB = OLog_to_Linear(in.z);
+    float3 linear = make_float3(linR, linG, linB);
+
+    float3 R2020toDWG = Rec2020_to_DWG(linear);
+
+
+    float3 out = Linear_to_DWG(R2020toDWG);
+
+
+    return out;
+}
