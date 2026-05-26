@@ -1,0 +1,99 @@
+//Scorch Tool
+
+/* Inspired by Steve Yedlins recreation of the HDR "look" in SDR in his "Debunking HDR" presentation. This tool sits downstream from the DRT and linearily compresses the signal leaving a defined portion in the highlight to break out of the usual sdr ceiling. Original Image is assumed to be viewed at 100 nits. When the display is set in accordance with the new peak luminance value of the DCTL the pure compressed image (with "Show Scorch" toggled off) should be identical to the 100nits version. 
+*/
+
+DEFINE_UI_PARAMS(white, Peak Luminance, DCTLUI_SLIDER_FLOAT, 100.f, 100.f, 200.0f, 0.01f)
+DEFINE_UI_PARAMS(thresh, Scorch Threshhold, DCTLUI_SLIDER_FLOAT, 0.9f, 0.0f, 1.0f, 0.01f)
+DEFINE_UI_PARAMS(input, Display Space, DCTLUI_COMBO_BOX, 0, {g24, g22}, { BT1886 (Gamma 2.4), Gamma 2.2 })
+DEFINE_UI_PARAMS(show, Show Scorch, DCTLUI_CHECK_BOX, 1)
+
+__DEVICE__ float3 gamma22(float3 in)
+{  
+    float3 lin;
+    lin.x = _powf(in.x, 2.2f);
+    lin.y = _powf(in.y, 2.2f);
+    lin.z = _powf(in.z, 2.2f);
+
+    return lin;
+}
+
+__DEVICE__ float3 bt1886(float3 in)
+{  
+    float3 lin;
+    lin.x = _powf(in.x, 2.4f);
+    lin.y = _powf(in.y, 2.4f);
+    lin.z = _powf(in.z, 2.4f);
+
+    return lin;
+}
+
+__DEVICE__ float3 gamma22out(float3 in)
+{  
+    float3 gamma;
+    gamma.x = _powf(in.x, 1.f/2.2f);
+    gamma.y = _powf(in.y, 1.f/2.2f);
+    gamma.z = _powf(in.z, 1.f/2.2f);
+
+    return gamma;
+}
+
+__DEVICE__ float3 bt1886out(float3 in)
+{  
+    float3 gamma;
+    gamma.x = _powf(in.x, 1.f/2.4f);
+    gamma.y = _powf(in.y, 1.f/2.4f);
+    gamma.z = _powf(in.z, 1.f/2.4f);
+
+    return gamma;
+}
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B)
+{
+    
+    float3 in = {p_R, p_G, p_B};
+
+    float3 lin;
+    switch (input) {
+    case g24:
+    {lin = bt1886(in);}
+    break;
+    case g22:
+    {lin = gamma22(in);}
+    }
+
+    float lum = 0.21*lin.x+0.71*lin.y+0.08*lin.z;
+
+    float t = smoothstep(thresh, 1.f, lum);
+
+    float3 scorch;
+    scorch.x = lum < thresh ? lin.x/(white/100.f) : mix(lin.x/(white/100.f), lin.x, t);
+
+    scorch.y = lum < thresh ? lin.y/(white/100.f) : mix(lin.y/(white/100.f), lin.y, t);
+
+    scorch.z = lum < thresh ? lin.z/(white/100.f) : mix(lin.z/(white/100.f), lin.z, t);
+
+    if (show == 0) {
+
+    scorch.x = lin.x/(white/100.f);
+
+    scorch.y = lin.y/(white/100.f);
+
+    scorch.z = lin.z/(white/100.f) ;
+
+    }
+    
+  
+   float3 out;
+   switch (input) {
+    case g24:
+    {out = bt1886out(scorch);}
+    break;
+    case g22:
+    {out = gamma22out(scorch);}
+    }
+
+
+
+    return out;
+}
