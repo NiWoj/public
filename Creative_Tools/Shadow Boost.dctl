@@ -1,0 +1,354 @@
+DEFINE_UI_PARAMS(boost, Boost, DCTLUI_SLIDER_FLOAT, 0.0, 0.0, 3.0, 0.01)
+DEFINE_UI_PARAMS(thresh, Threshhold, DCTLUI_SLIDER_FLOAT, 0.18, 0.1, 1, 0.001)
+DEFINE_UI_PARAMS(blur_amount, Ratio, DCTLUI_SLIDER_FLOAT, 20, 0, 70, 0.1)
+DEFINE_UI_PARAMS(sigma_range, Range Sigma, DCTLUI_SLIDER_FLOAT, 0.1, 0.01, 1.0, 0.01)
+DEFINE_UI_PARAMS(gamma, Gamma, DCTLUI_SLIDER_FLOAT, 1.f, 0.5f, 2.5f, 0.001)
+DEFINE_UI_PARAMS(flare, Flare, DCTLUI_SLIDER_FLOAT, 0.0, -1.0, 1.0, 0.1)
+DEFINE_UI_PARAMS(blr_opt, Blur Option, DCTLUI_COMBO_BOX, 0, { GB, BLB}, { Gaussian, Bi-Lateral })
+DEFINE_UI_PARAMS(cst, Input Colour Space, DCTLUI_COMBO_BOX, 0, { DWG, ACEScct, LogC3, LIN }, { Davinci Wide Gamut, ACEScct, ARRI LogC3, Linear })
+DEFINE_UI_PARAMS(alpha, Show Alpha, DCTLUI_CHECK_BOX, 0)
+DEFINE_UI_PARAMS(lum, Limit to Luminance, DCTLUI_CHECK_BOX, 0)
+
+
+
+__DEVICE__ float3 DWG_to_Linear(float3 rgb)
+{
+    float DI_A = 0.0075f;
+    float DI_B = 7.0f;
+    float DI_C = 0.07329248f;
+    float DI_M = 10.44426855f;
+    float DI_LOG_CUT = 0.02740668f;
+   
+
+    float R = _powf(2.0, (rgb.x / DI_C) - DI_B)-DI_A;
+
+    if (rgb.x<DI_LOG_CUT){
+    R = rgb.x/DI_M;
+    }
+    else {
+    R = _powf(2.0, (rgb.x / DI_C) - DI_B)-DI_A;
+    }
+
+    float G = _powf(2.0, (rgb.y / DI_C) - DI_B)-DI_A;
+
+    if (rgb.y<DI_LOG_CUT){
+    G = rgb.y/DI_M;
+    }
+    else {
+    G = _powf(2.0, (rgb.y / DI_C) - DI_B)-DI_A;
+    }
+
+    float B = _powf(2.0, (rgb.z / DI_C) - DI_B)-DI_A;
+
+    if (rgb.z<DI_LOG_CUT){
+    B = rgb.z/DI_M;
+    }
+    else {
+    B = _powf(2.0, (rgb.z / DI_C) - DI_B)-DI_A;
+    }
+
+    const float3 L = make_float3(R, G, B);
+
+    return L;
+}
+
+__DEVICE__ float3 Linear_to_DWG(float3 curve)
+{
+    float DI_A = 0.0075f;
+    float DI_B = 7.0f;
+    float DI_C = 0.07329248f;
+    float DI_M = 10.44426855f;
+    float DI_LIN_CUT = 0.00262409f;
+
+
+    float R = curve.x<DI_LIN_CUT ? curve.x*DI_M : (log2(curve.x + DI_A) + DI_B)*DI_C;
+
+
+    float G = curve.y<DI_LIN_CUT ? curve.y*DI_M : (log2(curve.y + DI_A) + DI_B)*DI_C;
+
+    float B = curve.z<DI_LIN_CUT ? curve.z*DI_M : (log2(curve.z + DI_A) + DI_B)*DI_C;
+
+
+    const float3 V = make_float3(R, G, B);
+
+    return V;
+}
+
+__DEVICE__ float3 ACES_CCT_to_Linear(float3 rgb)
+{
+    float ACES_LoCut = 0.155251141552511f;
+    float ACES_HiCut = (log2(65504.f) + 9.72)/17.52f;
+
+    float R;
+
+    if (rgb.x >= ACES_LoCut && rgb.x < ACES_HiCut){
+        R = _powf(2,(rgb.x*17.52f-9.72f));
+    }
+    else if (rgb.x <= ACES_LoCut){
+        R = (rgb.x-0.0729055341958355f)/10.5402377416545f;
+    }
+
+    else {R = 65504.f;
+    }
+
+    float G;
+
+    if (rgb.y >= ACES_LoCut && rgb.y < ACES_HiCut){
+        G = _powf(2,(rgb.y*17.52f-9.72f));
+    }
+
+    else if (rgb.y <= ACES_LoCut){
+        G = (rgb.y-0.0729055341958355f)/10.5402377416545f;
+    }
+    else {G = 65504.f;};
+
+    float B;
+
+    if (rgb.z >= ACES_LoCut && rgb.z < ACES_HiCut){
+        B = _powf(2,(rgb.z*17.52f-9.72f));
+    }
+    else if (rgb.z <= ACES_LoCut){
+        B = (rgb.z-0.0729055341958355f)/10.5402377416545f;
+    }
+    else {B = 65504.f;}
+
+
+    float3 L = make_float3(R, G, B);
+
+    return L;
+}
+
+__DEVICE__ float3 Linear_to_ACES_CCT(float3 curve)
+{
+    float Lin_Cut = 0.0078125f;
+
+    float R = curve.x <= Lin_Cut ? 10.5402377416545 * curve.x * 0.0729055341958355 : (log2(curve.x) + 9.72f)/17.52f;
+
+    float G = curve.y <= Lin_Cut ? 10.5402377416545 * curve.y * 0.0729055341958355 : (log2(curve.y) + 9.72f)/17.52f;
+
+    float B = curve.z <= Lin_Cut ? 10.5402377416545 * curve.z * 0.0729055341958355 : (log2(curve.z) + 9.72f)/17.52f;
+
+    const float3 V = make_float3(R, G, B);
+
+    return V;
+}
+
+
+__DEVICE__ float3 ARRI_LogC3_to_Linear(float3 rgb)
+{
+    float cut = 0.004201f;
+    float a = 200.0f;
+    float b = -0.729169f;
+    float c = 0.247190f;
+    float d = 0.385537f;
+    float e = 193.235573f;
+    float f = -0.662201f;
+
+    float R = (rgb.x > e * cut + f) ? (_powf(10, (rgb.x - d) / c) - b) / a: (rgb.x - f) / e;
+
+    float G = (rgb.y > e * cut + f) ? (_powf(10, (rgb.y - d) / c) - b) / a: (rgb.y - f) / e;
+
+    float B = (rgb.z > e * cut + f) ? (_powf(10, (rgb.z - d) / c) - b) / a: (rgb.z - f) / e;
+
+    const float3 L = make_float3(R, G, B);
+
+    return L;
+}
+
+__DEVICE__ float3 Linear_to_ARRI_LogC3(float3 curve)
+{
+    float cut = 0.004201f;
+    float a = 200.0f;
+    float b = -0.729169f;
+    float c = 0.247190f;
+    float d = 0.385537f;
+    float e = 193.235573f;
+    float f = -0.662201f;
+
+    float R = (curve.x > cut) ? c * log10(a * curve.x + b) + d: e * curve.x + f;
+
+    float G = (curve.y > cut) ? c * log10(a * curve.y + b) + d: e * curve.y + f;
+
+    float B = (curve.z > cut) ? c * log10(a * curve.z + b) + d: e * curve.z + f;
+
+    const float3 V = make_float3(R, G, B);
+
+    return V;
+}
+
+__DEVICE__ float apply_gamma(float value, float gamma)
+
+{
+
+    float out = (-1*pow(1-value/1.f, gamma)+1);
+
+
+return out;
+
+
+}
+
+__DEVICE__ float3 to_linear(float3 rgb, int cst)
+{
+    switch (cst) {
+        case 0:  return DWG_to_Linear(rgb);
+        case 1:  return ACES_CCT_to_Linear(rgb);
+        case 2:  return ARRI_LogC3_to_Linear(rgb);
+        case 3:  return rgb; // already linear
+    }
+    return rgb;
+}
+
+
+__DEVICE__ float gaussianWeight2D(int x, int y, float sigma) {
+    float d = x * x + y * y;
+    return _expf(-d / (2.0f * sigma * sigma));
+}
+
+__DEVICE__ float gaussian_blur(
+    __TEXTURE__ texR,
+    __TEXTURE__ texG,
+    __TEXTURE__ texB,
+    int x, int y,
+    int width, int height,
+    int radius,
+    int cst,
+    float gamma
+) {
+    float sigma = max(1.0f, radius * 0.5f);
+
+    float sum = 0.0f;
+    float weightSum = 0.0f;
+
+    for (int dy = -radius; dy <= radius; dy++) {
+        int sampleY = clamp(y + dy, 0, height - 1);
+        for (int dx = -radius; dx <= radius; dx++) {
+            int sampleX = clamp(x + dx, 0, width - 1);
+            float w = gaussianWeight2D(dx, dy, sigma);
+            weightSum += w;
+
+            float r = _tex2D(texR, sampleX, sampleY);
+            float g = _tex2D(texG, sampleX, sampleY);
+            float b = _tex2D(texB, sampleX, sampleY);
+
+            float luma = 0.299f * r + 0.587f * g + 0.114f * b;
+            
+
+            sum += luma * w;
+        }
+    }
+
+    return sum / weightSum;
+}
+
+__DEVICE__ float bilateral_blur_luma_cs(
+    __TEXTURE__ texR, __TEXTURE__ texG, __TEXTURE__ texB,
+    int x, int y, int width, int height,
+    int radius, float sigma_range, int cst
+){
+    float sigma_spatial = max(1.0f, radius * 0.5f);
+
+    // center pixel in linear, compute center luminance
+    float3 c_s = make_float3(_tex2D(texR, x, y),
+                             _tex2D(texG, x, y),
+                             _tex2D(texB, x, y));
+    float3 c_lin = (cst == 3) ? c_s : to_linear(c_s, cst);
+    float  Lc = 0.299f*c_lin.x + 0.587f*c_lin.y + 0.114f*c_lin.z;
+
+    float sum = 0.0f, weightSum = 0.0f;
+
+    for (int dy = -radius; dy <= radius; ++dy) {
+        int sy = clamp(y + dy, 0, height - 1);
+        for (int dx = -radius; dx <= radius; ++dx) {
+            int sx = clamp(x + dx, 0, width - 1);
+
+            float w_spatial = gaussianWeight2D(dx, dy, sigma_spatial);
+
+            float3 n_s = make_float3(_tex2D(texR, sx, sy),
+                                     _tex2D(texG, sx, sy),
+                                     _tex2D(texB, sx, sy));
+            float3 n_lin = (cst == 3) ? n_s : to_linear(n_s, cst);
+            float  Ln = 0.299f*n_lin.x + 0.587f*n_lin.y + 0.114f*n_lin.z;
+
+            // range weight on *luminance* (closer to Gaussian behavior)
+            float dL   = Ln - Lc;
+            float w_range = _expf(-(dL*dL) / (2.0f * sigma_range * sigma_range));
+
+            float w = w_spatial * w_range;
+            weightSum += w;
+            sum += Ln * w;
+        }
+    }
+    return sum / max(weightSum, 1e-8f);
+}
+
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, __TEXTURE__ p_TexR, __TEXTURE__ p_TexG, __TEXTURE__ p_TexB) {
+    
+    float r = _tex2D(p_TexR, p_X, p_Y);
+    float g = _tex2D(p_TexG, p_X, p_Y);
+    float b = _tex2D(p_TexB, p_X, p_Y);
+    float3 in = make_float3(r, g, b);
+
+
+    //Input to Linear
+    float3 lin;
+    switch (cst) {
+       case 0: lin = DWG_to_Linear(in);        break; // Davinci Wide Gamut
+       case 1: lin = ACES_CCT_to_Linear(in);   break; // ACEScct
+       case 2: lin = ARRI_LogC3_to_Linear(in); break; // ARRI LogC3
+       case 3: lin = in;                       break; // Linear
+    }
+
+
+    int rFloor = (int)floor(blur_amount);
+    int rCeil  = (int)ceil(blur_amount);
+
+    float blurFloor = blr_opt == 0 ? gaussian_blur(p_TexR, p_TexG, p_TexB, p_X, p_Y, p_Width, p_Height, rFloor, cst, gamma) : bilateral_blur_luma_cs(p_TexR, p_TexG, p_TexB, p_X, p_Y, p_Width, p_Height, rFloor,  sigma_range, cst);
+    float blurCeil  = blr_opt == 0 ? gaussian_blur(p_TexR, p_TexG, p_TexB, p_X, p_Y, p_Width, p_Height, rCeil, cst, gamma) : bilateral_blur_luma_cs(p_TexR, p_TexG, p_TexB, p_X, p_Y, p_Width, p_Height, rCeil,  sigma_range, cst);
+
+
+    float t = blur_amount - (float)rFloor;
+    
+    float blurred = blurFloor + t * (blurCeil - blurFloor);
+
+    float mask = blurred >= thresh ? 1.0 : blurred*(1/thresh);
+    mask = apply_gamma(mask, gamma);
+
+    mask = 1.f - mask;
+
+
+    //Apply linear gain
+    float3 boosted;
+    boosted.x = mix(lin.x, lin.x*(1.f+boost),  mask);
+    boosted.y = mix(lin.y, lin.y*(1.f+boost),  mask);
+    boosted.z = mix(lin.z, lin.z*(1.f+boost),  mask);
+
+    //Output transform
+    float3 out;
+    switch (cst) {
+        case 0: out = Linear_to_DWG(boosted);        break;
+        case 1: out = Linear_to_ACES_CCT(boosted);   break;
+        case 2: out = Linear_to_ARRI_LogC3(boosted); break;
+        case 3: out = boosted;                       break;
+    }
+
+
+    if (alpha == 1){
+     out.x = mask;
+     out.y = mask;
+     out.z = mask;
+    }
+
+    return out;
+}
+
+
+
+
+
+
+
+
+
+
