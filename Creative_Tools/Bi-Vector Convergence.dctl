@@ -1,12 +1,11 @@
 
 // Bi-Vector Hue Convergence
 
-/* RGB to HSL; Rotate HSL; HSL to RGB  */
-DEFINE_UI_PARAMS(blend, Global Strength, DCTLUI_SLIDER_FLOAT, 1.f, 0.0f, 1.0f, 0.01f)
-DEFINE_UI_PARAMS(value1, Hue Vector, DCTLUI_SLIDER_FLOAT, 0.f, 0.0, 360.0f, 1)
-DEFINE_UI_PARAMS(hue_offset, Hue Vector Offset, DCTLUI_SLIDER_FLOAT, 0, -180.f, 180.0f, 1)
-DEFINE_UI_PARAMS(ratio, Ratio, DCTLUI_SLIDER_FLOAT, 0.5, 0.f, 1.0f, .1f)
-DEFINE_UI_PARAMS(sat_c, Saturation Compression, DCTLUI_SLIDER_FLOAT, 1.f, 0.0f, 1.0f, 0.01f)
+/* This tool is inspired by the two-strip film process and provides a simple way to limit the hue pallette to two opposing hue vectors.*/
+
+DEFINE_UI_PARAMS(blend, Global Strength, DCTLUI_SLIDER_FLOAT, 0.f, 0.0f, 1.0f, 0.01f)
+DEFINE_UI_PARAMS(value1, Hue Vector, DCTLUI_SLIDER_FLOAT, 0.19f, 0.0, 360.0f, 1)
+DEFINE_UI_PARAMS(hue_offset, Hue Offset, DCTLUI_SLIDER_FLOAT, 0.0f, 0.0, 360.0f, 1)
 DEFINE_UI_PARAMS(lumfix, Preserve Luminance, DCTLUI_CHECK_BOX, 1)
 DEFINE_UI_PARAMS(checkbox, Target Hues, DCTLUI_CHECK_BOX, 0)
 
@@ -100,9 +99,13 @@ __DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p
     float3 rgb =  make_float3(p_R, p_G, p_B);
 
     float3 hsl = RGBtoHSL(rgb);
+
+    float sat_c = 1.f;
+    float ratio = 0.5f;
+    
    
     float hue1 = (value1/360);
-    float hue2 = (hue1+0.5f+hue_offset/360); 
+    float hue2 = (hue1+0.5f + hue_offset/360); 
     float hue_midpoint = (hue2-hue1)*0.5+((hue2-hue1)*(ratio-0.5f));
     float hue_midpoint2 = hue2 + (1-(hue2-hue1))*0.5+((1-(hue2-hue1))*(ratio-0.5f));
         if (hue_midpoint2>1.0){
@@ -166,12 +169,3 @@ __DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p
     };
 
 }
-
-
-
-
-
-
-
-
-
