@@ -1,3 +1,6 @@
+//Shadow Boost
+// Inspired by the Baselight tool of the same name. Lifts shadows based on texture, leaving micro contrast in tact.
+
 DEFINE_UI_PARAMS(boost, Boost, DCTLUI_SLIDER_FLOAT, 0.0, 0.0, 3.0, 0.01)
 DEFINE_UI_PARAMS(thresh, Threshhold, DCTLUI_SLIDER_FLOAT, 0.18, 0.1, 1, 0.001)
 DEFINE_UI_PARAMS(blur_amount, Ratio, DCTLUI_SLIDER_FLOAT, 20, 0, 70, 0.1)
